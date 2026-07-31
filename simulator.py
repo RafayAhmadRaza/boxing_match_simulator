@@ -213,13 +213,13 @@ def simulate_exchange(
         defender_head,defender_body,defender_koed= apply_dmg(dmg,defender_head,defender_body,islivershotted,shot_type)
 
         if defender_koed:
+            defender_kd_count+=1
             defender_heart = defender["Heart"]
             if defender_head <=0:
                 defender_head,defender_got_up,defender_stopped= recover_from_ko(defender_heart,defender_head,defender_kd_count,rounds)
-                defender_kd_count+=1
-            if defender_head <=0:
-                defender_head, defender_got_up,defender_stopped = recover_from_ko(defender_heart,defender_body,defender_kd_count,rounds)
-                defender_kd_count+=1
+            if defender_body <=0:
+                defender_body, defender_got_up,defender_stopped = recover_from_ko(defender_heart,defender_body,defender_kd_count,rounds)
+
 
         if defender_got_up == True:
             print(f"{defender['Name']} got up!")
@@ -236,6 +236,10 @@ def simulate_exchange(
             body_cond_1 = attacker_body
             head_cond_2 = defender_head
             body_cond_2 = defender_body
+            stoppage_1 = defender_stopped
+            stoppage_2 = attacker_stopped
+            knockdown_count_1 = defender_kd_count
+            knockdown_count_2 = attacker_kd_count
         else:
             landed_punch_count_2 += 1
             normal_punch_landed_2 += 1
@@ -243,13 +247,18 @@ def simulate_exchange(
             body_cond_2 = attacker_body
             head_cond_1 = defender_head
             body_cond_1 = defender_body
+            stoppage_2 = defender_stopped
+            stoppage_1 = attacker_stopped
 
+            knockdown_count_2 = defender_kd_count
+            knockdown_count_1 = attacker_kd_count
     else:
 
         print("Original punch missed.")
+        
 
 
-    if defender_counter_chance >= 95:
+    if not Match_Over and defender_counter_chance >= 95:
 
         print(
             f"{defender['Name']} gets a counter opportunity!"
@@ -302,13 +311,12 @@ def simulate_exchange(
             attacker_head,attacker_body,attacker_koed= apply_dmg(counter_dmg,attacker_head,attacker_body,islivershotted,shot_type)
 
             if attacker_koed:
+                attacker_kd_count+=1
                 attacker_heart = attacker["Heart"]
             if attacker_head <=0:
                 attacker_head,attacker_got_up,attacker_stopped= recover_from_ko(attacker_heart,attacker_head,attacker_kd_count,rounds)
-                attacker_kd_count+=1
             if attacker_body <=0:
                 attacker_body, attacker_got_up,attacker_stopped = recover_from_ko(attacker_heart,attacker_body,attacker_kd_count,rounds)
-                attacker_kd_count+=1
 
             if attacker_got_up == True:
                 print(f"{attacker['Name']} got up!")
@@ -324,7 +332,12 @@ def simulate_exchange(
                 body_cond_2 = attacker_body
                 head_cond_1 = defender_head
                 body_cond_1 = defender_body
-                
+                stoppage_1 = defender_stopped
+                stoppage_2 = attacker_stopped
+
+                knockdown_count_1 = defender_kd_count
+                knockdown_count_2 = attacker_kd_count
+                    
             else:
                 landed_punch_count_1 += 1
                 counter_punch_landed_1 += 1
@@ -332,6 +345,11 @@ def simulate_exchange(
                 body_cond_1 = attacker_body
                 head_cond_2 = defender_head
                 body_cond_2 = defender_body
+                stoppage_2 = defender_stopped
+                stoppage_1 = attacker_stopped
+
+                knockdown_count_2 = defender_kd_count
+                knockdown_count_1 = attacker_kd_count
 
         else:
 
@@ -482,24 +500,21 @@ def recover_from_ko(heart,cond,ko_count,round_count):
     recovery_value = 0
     if ko_count == 0:
         recovery_value = 2
-    elif ko_count>1:
+    elif ko_count == 1:
         recovery_value = 1
-    elif ko_count>=2:
+    elif ko_count ==2:
         recovery_value = 0.5
     else:
         recovery_value = 0.1
 
-    if round_count == 4:
-        if ko_count == 2:
-            stopped = True
-            return cond, False,stopped
-    elif round_count == 8:
-        if ko_count == 3:
-            stopped= True
-            return cond,False,stopped
-    elif round_count == 10:
-        if ko_count == 5:
-            return cond,False,stopped
+    if round_count == 4 and ko_count >= 2:
+        return cond, False, True
+
+    if round_count == 8 and ko_count >= 3:
+        return cond, False, True
+
+    if round_count == 10 and ko_count >= 5:
+        return cond, False, True
         
 
     recovery_chance = heart*recovery_modifier+random.randint(0,20)
@@ -507,7 +522,7 @@ def recover_from_ko(heart,cond,ko_count,round_count):
     health_recovery = (heart*recovery_value)*.6
     cond = cond + health_recovery
 
-    if recovery_value<=recovery_threshold:
+    if recovery_chance<=recovery_threshold:
         gotUp = False
         return cond,gotUp,False
     else:
@@ -557,6 +572,8 @@ def simulate_round(rounds,boxer_1,boxer_2,boxer_1_archetype,boxer_2_archetype,wa
             if i%5==0:
                 initiative_wins_1,initiative_wins_2,counter_punch_count_1,counter_punch_count_2,total_punch_count_1,total_punch_count_2,landed_punch_count_1,landed_punch_count_2,normal_punch_count_1,landed_counter_punch_1,normal_punch_count_2,landed_counter_punch_2,head_cond_1,body_cond_1,head_cond_2,body_cond_2,knockdown_counts_1,knockdown_counts_2,stoppage_1,stoppage_2,Match_Over,winner= simulate_exchange(boxer_1,boxer_2,boxer_1_archetype,boxer_2_archetype,initiative_wins_1,initiative_wins_2,counter_punch_count_1,counter_punch_count_2,total_punch_count_1,total_punch_count_2,landed_punch_count_1,landed_punch_count_2,normal_punch_count_1,landed_counter_punch_1,normal_punch_count_2,landed_counter_punch_2,head_cond_1,body_cond_1,head_cond_2,body_cond_2,knockdown_counts_1,knockdown_counts_2)
                 time.sleep(delay_value)
+                if Match_Over:
+                    break
         rounds_summary.append({
             "Round":round+1,
             "Boxer 1":{
@@ -579,10 +596,10 @@ def simulate_round(rounds,boxer_1,boxer_2,boxer_1_archetype,boxer_2_archetype,wa
             }
             )
         if Match_Over == True:
-            if stoppage_1:
+            if stoppage_1 or stoppage_2:
                 print(f"winner by Technical Knock Out in Round {round+1} is {winner['Name']}")
-            elif stoppage_2:
-                print(f"winner by Technical Knock Out in Round {round+1} is {winner['Name']}")
+                KO_win=True
+                break
             else:
                 KO_win = True
                 print(f"winner by Knock Out in Round {round+1} is {winner['Name']}")
