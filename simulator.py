@@ -779,49 +779,32 @@ def judge_2(rounds):
         boxer_2_landed = rounds[i]["Boxer 2"]['Boxer 2 Landed Punches']
         boxer_1_knockdowns = rounds[i]["Boxer 1"]['Boxer 1 Knockdowns']
         boxer_2_knockdowns = rounds[i]["Boxer 2"]['Boxer 2 Knockdowns']
+        kd_diff = boxer_1_knockdowns - boxer_2_knockdowns
 
-        if(boxer_1_knockdowns==1):
-            round_score_1+=10
-            round_score_2+=8
-            
-         
-            score_1+=round_score_1
-            score_2+=round_score_2
+        if kd_diff != 0:
+            if kd_diff > 0:
+                round_score_1 = 10
+                round_score_2 = max(10 - (2 * kd_diff), 6)
+            else:
+                round_score_2 = 10
+                round_score_1 = max(10 - (2 * abs(kd_diff)), 6)
 
-            
-
+            score_1 += round_score_1
+            score_2 += round_score_2
             continue
-        elif(boxer_1_knockdowns==2):
-            round_score_1+=10
-            round_score_2+=8
-                        
 
+        if(boxer_1_landed > boxer_2_landed):
+            round_score_1 += 10
+            round_score_2 += 9
+        elif(boxer_2_landed > boxer_1_landed):
+            round_score_2 += 10
+            round_score_1 += 9
+        else:
+            round_score_1 += 10
+            round_score_2 += 10
 
-            score_1+=round_score_1
-            score_2+=round_score_2
-            
-          
-            continue
-        elif(boxer_2_knockdowns==1):
-            round_score_1+=8
-            round_score_2+=10
-                        
-            
-
-            score_1+=round_score_1
-            score_2+=round_score_2
-            
-
-            continue
-        elif(boxer_2_knockdowns==2):
-            round_score_1+=7
-            round_score_2+=10
-
-            score_1+=round_score_1
-            score_2+=round_score_2
-            
-          
-            continue
+        score_1 += round_score_1
+        score_2 += round_score_2
 
         if(boxer_1_landed >boxer_2_landed):
             round_score_1+=10
@@ -874,6 +857,7 @@ def judge_3(rounds):
             elif(boxer_1_dodged_punch== boxer_2_dodged_punch):
                 round_score_1+=10
                 round_score_2+=10
+
                             
 
             score_1+=round_score_1
