@@ -634,13 +634,16 @@ def simulate_round(rounds,boxer_1,boxer_2,boxer_1_archetype,boxer_2_archetype,wa
     print(normal_punch_count_2)
     print("Counter Punches Landed")
     print(landed_counter_punch_2)
-    loser = None
-    if winner['Name'] == boxer_1["Name"]:
-        loser = boxer_2["Name"]
-    else:
-        loser = boxer_1["Name"]
+    loser_name = None
+    winner_name = None
+    if KO_win:
+        if winner['Name'] == boxer_1["Name"]:
+            winner_name = winner['Name']
+            loser_name = boxer_2["Name"]
+        else:
+            loser_name = boxer_1["Name"]
 
-    return rounds_summary,KO_win,winner['Name'],loser
+    return rounds_summary,KO_win,winner_name,loser_name
 
 
 def set_ko(isKOed):
@@ -651,6 +654,7 @@ def go_decision(rounds_summary):
     score_1 = judge_1(rounds_summary)
     score_2 =judge_2(rounds_summary)
     score_3 =judge_3(rounds_summary)
+    isDraw = False
 
 
 
@@ -668,18 +672,29 @@ def go_decision(rounds_summary):
             boxer_2_judges+=1
         else:
             draws+=1
-
+    winner=loser=None
     if(boxer_1_judges == 3):
         print(f"Your winner by Unanimous Decision! \n {rounds_summary[0]['Boxer 1']['Boxer 1']}")
+        winner = rounds_summary[0]['Boxer 1']['Boxer 1']
+        loser = rounds_summary[0]['Boxer 2']['Boxer 2'] 
     elif(boxer_1_judges==2):
         print(f"Your winner by Split Decision! \n {rounds_summary[0]['Boxer 1']['Boxer 1']}")
+        winner = rounds_summary[0]['Boxer 1']['Boxer 1']
+        loser = rounds_summary[0]['Boxer 2']['Boxer 2'] 
     elif(boxer_2_judges == 3):
         print(f"Your winner by Unanimous Decision! \n {rounds_summary[0]['Boxer 2']['Boxer 2']}")
+        loser = rounds_summary[0]['Boxer 1']['Boxer 1']
+        winner = rounds_summary[0]['Boxer 2']['Boxer 2'] 
     elif(boxer_2_judges==2):
         print(f"Your winner by Split Decision! \n {rounds_summary[0]['Boxer 2']['Boxer 2']}")
+        loser = rounds_summary[0]['Boxer 1']['Boxer 1']
+        winner = rounds_summary[0]['Boxer 2']['Boxer 2'] 
     elif(draws == 1):
         print("Match Drawed!")
-    
+        loser = rounds_summary[0]['Boxer 1']['Boxer 1']
+        winner = rounds_summary[0]['Boxer 2']['Boxer 2'] 
+        isDraw = True
+    return winner,loser,isDraw
 
 
 def judge_1(rounds):
@@ -881,6 +896,7 @@ def judge_3(rounds):
 
 if __name__ == "__main__":
 
+    isDraw= False
     isDecision = False
     rounds_summary = []
     winner=loser = None
@@ -912,13 +928,13 @@ if __name__ == "__main__":
 
 
     if not KO_win:
-        go_decision(rounds_summary)
+        winner,loser,isDraw = go_decision(rounds_summary)
         isDecision = True
         
     else:
         print("Bye Bye")
 
-    new_result = result.Result(winner,loser,KO_win,isDecision)
+    new_result = result.Result(winner,loser,KO_win,isDecision,isDraw)
     new_result.add_result()
 
 

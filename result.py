@@ -3,11 +3,12 @@ from pathlib import Path
 
 class Result:
 
-    def __init__(self,winner, loser, isKO, isDecision):
+    def __init__(self,winner, loser, isKO, isDecision,isDraw):
         self.winner = winner
         self.loser = loser
         self.isKO = isKO
         self.isDecision = isDecision
+        self.isDraw = isDraw
     def print_debug(self):
         print(self.winner,self.loser,self.isKO,self.isDecision)
 
@@ -51,17 +52,20 @@ class Result:
                 })
                 df= pd.concat([df,pd.DataFrame([initial_result])],ignore_index=True)
 
+            if self.isDraw:
+                 df.loc[df["Name"] == self.winner, "draws"] +=1
+                 df.loc[df["Name"] == self.loser, "draws"] +=1
+                 return
+            else:
+                df.loc[df["Name"] == self.winner, "wins"] +=1
+                df.loc[df["Name"] == self.loser, "losses"] +=1
 
-
-            df.loc[df["Name"] == self.winner, "wins"] +=1
-            df.loc[df["Name"] == self.loser, "losses"] +=1
-
-            if self.isKO:
-                df.loc[df["Name"] == self.winner, "ko wins"] +=1
-                df.loc[df["Name"] == self.loser, "ko losses"] +=1
-            if self.isDecision:
-                df.loc[df["Name"] == self.winner, "decision wins"] +=1
-                df.loc[df["Name"] == self.loser, "decision losses"] +=1
+                if self.isKO:
+                    df.loc[df["Name"] == self.winner, "ko wins"] +=1
+                    df. loc[df["Name"] == self.loser, "ko losses"] +=1
+                if self.isDecision:
+                    df.loc[df["Name"] == self.winner, "decision wins"] +=1
+                    df.loc[df["Name"] == self.loser, "decision losses"] +=1
 
             df.to_csv(result_csv_path,index=0)
             print(f'Update Records Are\n{df.loc[df["Name"] == self.winner]}\n{df.loc[df["Name"] == self.loser]}')
