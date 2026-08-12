@@ -492,7 +492,7 @@ def apply_dmg(damage,head_cond,body_cond,isLiverShotted,shot_type):
 
     return head_cond,body_cond,isKO
 
-def recover_from_ko(heart,cond,ko_count,round_count):
+def recover_from_ko(heart,cond,ko_count,rounds):
     gotUp = False
     stopped = False
     recovery_modifier = 0.5
@@ -507,13 +507,13 @@ def recover_from_ko(heart,cond,ko_count,round_count):
     else:
         recovery_value = 0.1
 
-    if round_count == 4 and ko_count >= 2:
+    if rounds == 4 and ko_count >= 2:
         return cond, False, True
 
-    if round_count == 8 and ko_count >= 3:
+    if rounds == 8 and ko_count >= 3:
         return cond, False, True
 
-    if round_count == 10 and ko_count >= 5:
+    if rounds == 10 and ko_count >= 5:
         return cond, False, True
         
 
