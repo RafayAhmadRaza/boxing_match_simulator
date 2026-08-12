@@ -26,3 +26,5 @@ else:
 
 print("\n ==== OFFICIAL DIVISION RANKINGS ====")
 print(final_rankings[["Name",'wins','losses','ko wins','Score']].to_string())
+
+final_rankings.to_csv((Path.cwd()/"rankings.csv"))
