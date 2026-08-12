@@ -50,7 +50,6 @@ class Result:
                     
                 })
                 df= pd.concat([df,pd.DataFrame([initial_result])],ignore_index=True)
-            print(df)
 
 
 
