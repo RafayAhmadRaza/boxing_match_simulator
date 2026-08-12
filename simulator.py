@@ -828,20 +828,6 @@ def judge_2(rounds):
         score_1 += round_score_1
         score_2 += round_score_2
 
-        if(boxer_1_landed >boxer_2_landed):
-            round_score_1+=10
-            round_score_2+=9
-        elif(boxer_2_landed>boxer_1_landed):
-            round_score_2+=10
-            round_score_1+=9
-        elif(boxer_1_landed == boxer_2_landed):
-            round_score_1+=10
-            round_score_2+=10
-     
-
-        score_1+=round_score_1
-        score_2+=round_score_2
-        
     print(f"Second Judge total: {score_1} - {score_2}")
 
 
