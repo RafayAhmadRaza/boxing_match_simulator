@@ -8,7 +8,7 @@ archetype_df = None
 path_boxer_csv = Path.cwd()/"boxer.csv"
 path_archtype_csv = Path.cwd()/"archetypes.csv"
 
-
+import result
 
 
 
@@ -311,12 +311,12 @@ def simulate_exchange(
             attacker_head,attacker_body,attacker_koed= apply_dmg(counter_dmg,attacker_head,attacker_body,islivershotted,shot_type)
 
             if attacker_koed:
-                attacker_kd_count+=1
                 attacker_heart = attacker["Heart"]
-            if attacker_head <=0:
-                attacker_head,attacker_got_up,attacker_stopped= recover_from_ko(attacker_heart,attacker_head,attacker_kd_count,rounds)
-            if attacker_body <=0:
-                attacker_body, attacker_got_up,attacker_stopped = recover_from_ko(attacker_heart,attacker_body,attacker_kd_count,rounds)
+                attacker_kd_count+=1
+                if attacker_head <=0:
+                    attacker_head,attacker_got_up,attacker_stopped= recover_from_ko(attacker_heart,attacker_head,attacker_kd_count,rounds)
+                if attacker_body <=0:
+                    attacker_body, attacker_got_up,attacker_stopped = recover_from_ko(attacker_heart,attacker_body,attacker_kd_count,rounds)
 
             if attacker_got_up == True:
                 print(f"{attacker['Name']} got up!")
@@ -570,7 +570,7 @@ def simulate_round(rounds,boxer_1,boxer_2,boxer_1_archetype,boxer_2_archetype,wa
         print(f"---- ROUND {round+1} -----")
         for i in range(0,200):
             if i%5==0:
-                initiative_wins_1,initiative_wins_2,counter_punch_count_1,counter_punch_count_2,total_punch_count_1,total_punch_count_2,landed_punch_count_1,landed_punch_count_2,normal_punch_count_1,landed_counter_punch_1,normal_punch_count_2,landed_counter_punch_2,head_cond_1,body_cond_1,head_cond_2,body_cond_2,knockdown_counts_1,knockdown_counts_2,stoppage_1,stoppage_2,Match_Over,winner= simulate_exchange(boxer_1,boxer_2,boxer_1_archetype,boxer_2_archetype,initiative_wins_1,initiative_wins_2,counter_punch_count_1,counter_punch_count_2,total_punch_count_1,total_punch_count_2,landed_punch_count_1,landed_punch_count_2,normal_punch_count_1,landed_counter_punch_1,normal_punch_count_2,landed_counter_punch_2,head_cond_1,body_cond_1,head_cond_2,body_cond_2,knockdown_counts_1,knockdown_counts_2)
+                initiative_wins_1,initiative_wins_2,counter_punch_count_1,counter_punch_count_2,total_punch_count_1,total_punch_count_2,landed_punch_count_1,landed_punch_count_2,normal_punch_count_1,landed_counter_punch_1,normal_punch_count_2,landed_counter_punch_2,head_cond_1,body_cond_1,head_cond_2,body_cond_2,knockdown_counts_1,knockdown_counts_2,stoppage_1,stoppage_2,Match_Over,winner= simulate_exchange(boxer_1,boxer_2,boxer_1_archetype,boxer_2_archetype,initiative_wins_1,initiative_wins_2,counter_punch_count_1,counter_punch_count_2,total_punch_count_1,total_punch_count_2,landed_punch_count_1,landed_punch_count_2,normal_punch_count_1,landed_counter_punch_1,normal_punch_count_2,landed_counter_punch_2,head_cond_1,body_cond_1,head_cond_2,body_cond_2,rounds=rounds,knockdown_count_1=knockdown_counts_1,knockdown_count_2=knockdown_counts_2)
                 time.sleep(delay_value)
                 if Match_Over:
                     break
@@ -634,8 +634,13 @@ def simulate_round(rounds,boxer_1,boxer_2,boxer_1_archetype,boxer_2_archetype,wa
     print(normal_punch_count_2)
     print("Counter Punches Landed")
     print(landed_counter_punch_2)
+    loser = None
+    if winner['Name'] == boxer_1["Name"]:
+        loser = boxer_2["Name"]
+    else:
+        loser = boxer_1["Name"]
 
-    return rounds_summary,KO_win
+    return rounds_summary,KO_win,winner['Name'],loser
 
 
 def set_ko(isKOed):
@@ -876,7 +881,9 @@ def judge_3(rounds):
 
 if __name__ == "__main__":
 
+    isDecision = False
     rounds_summary = []
+    winner=loser = None
     boxer_df,archetype_df = load_boxers(path_boxer_csv,path_archtype_csv)
     KO_win = False
     print("======Current Roster======")
@@ -887,11 +894,6 @@ if __name__ == "__main__":
 
     boxer_1,boxer_2 = select_boxers(first_boxer_choice,second_boxer_choice,boxer_df)
     boxer_1_archetype,boxer_2_archetype = get_archetypes(boxer_1,boxer_2,archetype_df)
-
-    print(boxer_1)
-    print(boxer_1_archetype)
-    print(boxer_2)
-    print(boxer_2_archetype)
 
     watch_mode = True
     rounds = int(input("Enter Round Numbers: "))
@@ -906,15 +908,18 @@ if __name__ == "__main__":
             print("Invalid Input")
             exit()
 
-    rounds_summary,KO_win = simulate_round(rounds,boxer_1,boxer_2,boxer_1_archetype,boxer_2_archetype,watch_mode)
+    rounds_summary,KO_win,winner,loser = simulate_round(rounds,boxer_1,boxer_2,boxer_1_archetype,boxer_2_archetype,watch_mode)
 
-    print(rounds_summary,KO_win)
 
     if not KO_win:
         go_decision(rounds_summary)
+        isDecision = True
+        
     else:
         print("Bye Bye")
 
+    new_result = result.Result(winner,loser,KO_win,isDecision)
+    new_result.add_result()
 
 
 
