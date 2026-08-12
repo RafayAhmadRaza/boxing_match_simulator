@@ -642,6 +642,8 @@ def simulate_round(rounds,boxer_1,boxer_2,boxer_1_archetype,boxer_2_archetype,wa
             loser_name = boxer_2["Name"]
         else:
             loser_name = boxer_1["Name"]
+            winner_name = winner['Name']
+
 
     return rounds_summary,KO_win,winner_name,loser_name
 
@@ -933,7 +935,7 @@ if __name__ == "__main__":
         
     else:
         print("Bye Bye")
-
+    # print(winner,loser)
     new_result = result.Result(winner,loser,KO_win,isDecision,isDraw)
     new_result.add_result()
 
