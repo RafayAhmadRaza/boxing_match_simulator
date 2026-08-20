@@ -11,6 +11,29 @@ path_archtype_csv = Path.cwd()/"archetypes.csv"
 import result
 
 
+DEBUTANT_THRESHOLD = 8
+
+STAMINA_BASE_DECAY = 0.15
+STAMINA_PUNCH_COST = 0.05
+STAMINA_DAMAGE_TAKEN_COST = 0.10
+STAMINA_BODY_SHOT_COST = 0.20
+STAMINA_MIN_FACTOR = 0.40
+
+STAMINA_ARCHETYPE_PARAMS = {
+    "Pressure Fighter": {"decay_multiplier": 1.3, "recovery_per_round": 12},
+    "Swarmer": {"decay_multiplier": 1.3, "recovery_per_round": 12},
+    "Slugger": {"decay_multiplier": 1.5, "recovery_per_round": 6},
+    "Out Boxer": {"decay_multiplier": 0.8, "recovery_per_round": 8},
+    "Technical": {"decay_multiplier": 0.8, "recovery_per_round": 8},
+    "Boxer Puncher": {"decay_multiplier": 1.0, "recovery_per_round": 10},
+    "Counter Puncher": {"decay_multiplier": 0.9, "recovery_per_round": 10},
+    "Body Puncher": {"decay_multiplier": 1.1, "recovery_per_round": 9},
+}
+
+def get_stamina_params(archetype_name):
+    return STAMINA_ARCHETYPE_PARAMS.get(archetype_name, {"decay_multiplier": 1.0, "recovery_per_round": 10})
+
+
 
 def load_boxers(boxer_path,archetype_path):
 
@@ -52,6 +75,10 @@ def simulate_exchange(
     head_cond_2,
     body_cond_2,
     rounds,
+    stamina_1,
+    stamina_2,
+    b1_params,
+    b2_params,
     winner=None,
     knockdown_count_1=0,
     knockdown_count_2=0,
@@ -65,15 +92,16 @@ def simulate_exchange(
 ):
     print("Simulating Exchange")
 
-
+    stamina_factor_1 = max(stamina_1 / 100.0, STAMINA_MIN_FACTOR)
+    stamina_factor_2 = max(stamina_2 / 100.0, STAMINA_MIN_FACTOR)
 
     aggression_1 = B1AType.iloc[0]["Aggression"]
     speed_1 = boxer_1["Speed"]
-    initiative_score_1 = aggression_1 + speed_1 + random.randrange(1, 100)
+    initiative_score_1 = aggression_1 + (speed_1 * stamina_factor_1) + random.randrange(1, 100)
 
     aggression_2 = B2AType.iloc[0]["Aggression"]
     speed_2 = boxer_2["Speed"]
-    initiative_score_2 = aggression_2 + speed_2 + random.randrange(1, 100)
+    initiative_score_2 = aggression_2 + (speed_2 * stamina_factor_2) + random.randrange(1, 100)
 
 
 
@@ -108,13 +136,13 @@ def simulate_exchange(
 
     counter_chance_1 = (
         counter_value_1
-        + speed_1
+        + (speed_1 * stamina_factor_1)
         - random.randrange(1, 100)
     )
 
     counter_chance_2 = (
         counter_value_2
-        + speed_2
+        + (speed_2 * stamina_factor_2)
         - random.randrange(1, 100)
     )
 
@@ -130,17 +158,22 @@ def simulate_exchange(
         attacker_got_up = got_up_1
         attacker_kd_count = knockdown_count_1
         attacker_stopped = stoppage_1
-
+        attacker_stamina = stamina_1
+        attacker_params = b1_params
+        attacker_stamina_factor = stamina_factor_1
 
         defender = boxer_2
         defender_archetype = B2AType
         defender_weights = weights_2
         defender_head = head_cond_2
         defender_body = body_cond_2
-        defender_koed=is_koed_2
+        defender_koed = is_koed_2
         defender_got_up = got_up_2
         defender_kd_count = knockdown_count_2
         defender_stopped = stoppage_2
+        defender_stamina = stamina_2
+        defender_params = b2_params
+        defender_stamina_factor = stamina_factor_2
 
 
         initiative_winner = 1
@@ -160,6 +193,9 @@ def simulate_exchange(
         attacker_got_up = got_up_2
         attacker_kd_count = knockdown_count_2
         attacker_stopped = stoppage_2
+        attacker_stamina = stamina_2
+        attacker_params = b2_params
+        attacker_stamina_factor = stamina_factor_2
 
 
         defender = boxer_1
@@ -171,6 +207,9 @@ def simulate_exchange(
         defender_got_up = got_up_1
         defender_kd_count = knockdown_count_1
         defender_stopped = stoppage_1
+        defender_stamina = stamina_1
+        defender_params = b1_params
+        defender_stamina_factor = stamina_factor_1
 
 
         initiative_winner = 2
@@ -200,7 +239,9 @@ def simulate_exchange(
         defender,
         defender_archetype,
         attacker,
-        selected_punch
+        selected_punch,
+        defender_stamina_factor,
+        attacker_stamina_factor
     )
 
     if original_landed:
@@ -209,16 +250,16 @@ def simulate_exchange(
         shot_type = random.choice(["Head","Body"])
         if selected_punch == "Body_Shot":
             shot_type = "Body"
-        dmg,islivershotted = calculate_dmg(attacker['Power'],selected_punch,shot_type)
-        defender_head,defender_body,defender_koed= apply_dmg(dmg,defender_head,defender_body,islivershotted,shot_type)
+        dmg, islivershotted = calculate_dmg(attacker['Power'], selected_punch, shot_type, attacker_stamina_factor)
+        defender_head, defender_body, defender_koed = apply_dmg(dmg, defender_head, defender_body, islivershotted, shot_type)
 
         if defender_koed:
-            defender_kd_count+=1
+            defender_kd_count += 1
             defender_heart = defender["Heart"]
-            if defender_head <=0:
-                defender_head,defender_got_up,defender_stopped= recover_from_ko(defender_heart,defender_head,defender_kd_count,rounds)
-            if defender_body <=0:
-                defender_body, defender_got_up,defender_stopped = recover_from_ko(defender_heart,defender_body,defender_kd_count,rounds)
+            if defender_head <= 0:
+                defender_head, defender_got_up, defender_stopped = recover_from_ko(defender_heart, defender_head, defender_kd_count, rounds, defender_stamina_factor)
+            if defender_body <= 0:
+                defender_body, defender_got_up, defender_stopped = recover_from_ko(defender_heart, defender_body, defender_kd_count, rounds, defender_stamina_factor)
 
 
         if defender_got_up == True:
@@ -285,18 +326,27 @@ def simulate_exchange(
             punch_count_2 += 1
             counter_attempting_fighter = boxer_2
             counter_attempting_archetype = B2AType
-
+            counter_attacker_stamina = stamina_2
+            counter_attacker_params = b2_params
+            counter_attacker_stamina_factor = stamina_factor_2
+            counter_defender_stamina_factor = stamina_factor_1
         else:
             punch_count_1 += 1
             counter_attempting_fighter = boxer_1
             counter_attempting_archetype = B1AType
+            counter_attacker_stamina = stamina_1
+            counter_attacker_params = b1_params
+            counter_attacker_stamina_factor = stamina_factor_1
+            counter_defender_stamina_factor = stamina_factor_2
 
         # Check whether the COUNTER lands.
         counter_landed = punch_landed(
             attacker,
             attacker_archetype,
             counter_attempting_fighter,
-            counter_punch
+            counter_punch,
+            counter_defender_stamina_factor,
+            counter_attacker_stamina_factor
         
         )
 
@@ -306,17 +356,17 @@ def simulate_exchange(
             shot_type = random.choice(["Head","Body"])
             if counter_punch == "Body_Shot":
                 shot_type = "Body"
-            dmg,islivershotted = calculate_dmg(counter_attempting_fighter['Power'],counter_punch,shot_type)
+            dmg, islivershotted = calculate_dmg(counter_attempting_fighter['Power'], counter_punch, shot_type, counter_attacker_stamina_factor)
             counter_dmg = dmg * 1.10
-            attacker_head,attacker_body,attacker_koed= apply_dmg(counter_dmg,attacker_head,attacker_body,islivershotted,shot_type)
+            attacker_head, attacker_body, attacker_koed = apply_dmg(counter_dmg, attacker_head, attacker_body, islivershotted, shot_type)
 
             if attacker_koed:
                 attacker_heart = attacker["Heart"]
-                attacker_kd_count+=1
-                if attacker_head <=0:
-                    attacker_head,attacker_got_up,attacker_stopped= recover_from_ko(attacker_heart,attacker_head,attacker_kd_count,rounds)
-                if attacker_body <=0:
-                    attacker_body, attacker_got_up,attacker_stopped = recover_from_ko(attacker_heart,attacker_body,attacker_kd_count,rounds)
+                attacker_kd_count += 1
+                if attacker_head <= 0:
+                    attacker_head, attacker_got_up, attacker_stopped = recover_from_ko(attacker_heart, attacker_head, attacker_kd_count, rounds, counter_defender_stamina_factor)
+                if attacker_body <= 0:
+                    attacker_body, attacker_got_up, attacker_stopped = recover_from_ko(attacker_heart, attacker_body, attacker_kd_count, rounds, counter_defender_stamina_factor)
 
             if attacker_got_up == True:
                 print(f"{attacker['Name']} got up!")
@@ -356,6 +406,44 @@ def simulate_exchange(
             print("Counter missed.")
 
 
+    decay_1 = STAMINA_BASE_DECAY * b1_params["decay_multiplier"]
+    decay_2 = STAMINA_BASE_DECAY * b2_params["decay_multiplier"]
+
+    stamina_1 -= decay_1
+    stamina_2 -= decay_2
+
+    if initiative_winner == 1:
+        stamina_1 -= STAMINA_PUNCH_COST
+        if original_landed:
+            if selected_punch == "Body_Shot":
+                stamina_2 -= STAMINA_BODY_SHOT_COST
+            else:
+                stamina_2 -= STAMINA_DAMAGE_TAKEN_COST
+        if not Match_Over and defender_counter_chance >= 95:
+            stamina_2 -= STAMINA_PUNCH_COST
+            if 'counter_landed' in locals() and counter_landed:
+                if counter_punch == "Body_Shot":
+                    stamina_1 -= STAMINA_BODY_SHOT_COST
+                else:
+                    stamina_1 -= STAMINA_DAMAGE_TAKEN_COST
+    else:
+        stamina_2 -= STAMINA_PUNCH_COST
+        if original_landed:
+            if selected_punch == "Body_Shot":
+                stamina_1 -= STAMINA_BODY_SHOT_COST
+            else:
+                stamina_1 -= STAMINA_DAMAGE_TAKEN_COST
+        if not Match_Over and defender_counter_chance >= 95:
+            stamina_1 -= STAMINA_PUNCH_COST
+            if 'counter_landed' in locals() and counter_landed:
+                if counter_punch == "Body_Shot":
+                    stamina_2 -= STAMINA_BODY_SHOT_COST
+                else:
+                    stamina_2 -= STAMINA_DAMAGE_TAKEN_COST
+
+    stamina_1 = max(stamina_1, 0.0)
+    stamina_2 = max(stamina_2, 0.0)
+
 
     return(
         initiavtivewin1,
@@ -380,8 +468,10 @@ def simulate_exchange(
         stoppage_2,
         Match_Over,
         winner,
+        stamina_1,
+        stamina_2,
     )
-def punch_landed(boxer_to_be_hit,BTBHAType,boxer_hitting,punch_type):
+def punch_landed(boxer_to_be_hit, BTBHAType, boxer_hitting, punch_type, defender_stamina_factor=1.0, attacker_stamina_factor=1.0):
 
     block_type_value = {
         "Classic": 5,
@@ -405,32 +495,32 @@ def punch_landed(boxer_to_be_hit,BTBHAType,boxer_hitting,punch_type):
     speed_bth = boxer_hitting['Speed']
     agility_bth = boxer_hitting['Agility']
 
-    movement_speed = movement_tbh+speed_tbh
+    movement_speed = movement_tbh + speed_tbh
     block_value = defense_tbh + block_type_value[boxer_to_be_hit['Block Style']]
 
-    defend_score = (block_value*0.6) +  (movement_speed*0.3) + random.randrange(-10,+10)
+    defend_score = ((block_value * 0.6) + (movement_speed * 0.3) + random.randrange(-10, +10)) * defender_stamina_factor
 
-    attack_score=  (speed_bth*0.6) +(agility_bth*0.4)+ punch_acc_modifier[punch_type]+random.randrange(-10,+10)
+    attack_score = ((speed_bth * 0.6) + (agility_bth * 0.4) + punch_acc_modifier[punch_type] + random.randrange(-10, +10)) * attacker_stamina_factor
 
 
-    advantage = attack_score-defend_score 
+    advantage = attack_score - defend_score 
     hit_chance = 50 + (advantage * 0.5)
 
-    if hit_chance<5:
-        hit_chance =5
+    if hit_chance < 5:
+        hit_chance = 5
 
-    if hit_chance> 95:
-        hit_chance= 95
+    if hit_chance > 95:
+        hit_chance = 95
         
     print(hit_chance)
-    if hit_chance <= random.randint(0,100):
+    if hit_chance <= random.randint(0, 100):
         print("Punch Missed")
         return False
     else:
         print("Punch landed")
         return True
 
-def calculate_dmg(power,punch_type,shot_type):
+def calculate_dmg(power, punch_type, shot_type, stamina_factor=1.0):
 
     punch_type_damage_modifier = {
         "Head":{
@@ -445,22 +535,22 @@ def calculate_dmg(power,punch_type,shot_type):
         "Hook":+16,
         "Uppercut":+18,
         "Body_Shot":+6
-            
+             
         }
     }
 
     damage = 0
     isLiverShotted = False
-    liver_shot_chance = random.randint(1,20)
+    liver_shot_chance = random.randint(1, 20)
 
     if liver_shot_chance == 20:
         damage = 400
         isLiverShotted = True
         
-        return damage,isLiverShotted
+        return damage, isLiverShotted
 
-    damage = (power*0.7)+(punch_type_damage_modifier[shot_type][punch_type])
-    return damage,isLiverShotted
+    damage = (power * 0.7 * stamina_factor) + (punch_type_damage_modifier[shot_type][punch_type])
+    return damage, isLiverShotted
 
 def apply_dmg(damage,head_cond,body_cond,isLiverShotted,shot_type):
 
@@ -491,8 +581,7 @@ def apply_dmg(damage,head_cond,body_cond,isLiverShotted,shot_type):
         isKO = set_ko(True)
 
     return head_cond,body_cond,isKO
-
-def recover_from_ko(heart,cond,ko_count,rounds):
+def recover_from_ko(heart, cond, ko_count, rounds, stamina_factor=1.0):
     gotUp = False
     stopped = False
     recovery_modifier = 0.5
@@ -502,7 +591,7 @@ def recover_from_ko(heart,cond,ko_count,rounds):
         recovery_value = 2
     elif ko_count == 1:
         recovery_value = 1
-    elif ko_count ==2:
+    elif ko_count == 2:
         recovery_value = 0.5
     else:
         recovery_value = 0.1
@@ -517,21 +606,22 @@ def recover_from_ko(heart,cond,ko_count,rounds):
         return cond, False, True
         
 
-    recovery_chance = heart*recovery_modifier+random.randint(0,20)
+
+    recovery_chance = (heart * recovery_modifier * stamina_factor) + random.randint(0, 20)
     
-    health_recovery = (heart*recovery_value)*.6
+    health_recovery = (heart * recovery_value) * 0.6
     cond = cond + health_recovery
 
-    if recovery_chance<=recovery_threshold:
+    if recovery_chance <= recovery_threshold:
         gotUp = False
-        return cond,gotUp,False
+        return cond, gotUp, False
     else:
         gotUp = True
-        return cond,gotUp,False
+        return cond, gotUp, False
 
 
 
-def simulate_round(rounds,boxer_1,boxer_2,boxer_1_archetype,boxer_2_archetype,watch_mode=True):
+def simulate_round(rounds, boxer_1, boxer_2, boxer_1_archetype, boxer_2_archetype, watch_mode=True):
     delay_value = 0
     if watch_mode:
         delay_value = 0.25
@@ -544,13 +634,19 @@ def simulate_round(rounds,boxer_1,boxer_2,boxer_1_archetype,boxer_2_archetype,wa
     body_cond_1 = 1000
     head_cond_2 = 1000
     body_cond_2 = 1000
+
+    stamina_1 = float(boxer_1["Stamina"])
+    stamina_2 = float(boxer_2["Stamina"])
+    b1_params = get_stamina_params(boxer_1_archetype.iloc[0]["Archetype"])
+    b2_params = get_stamina_params(boxer_2_archetype.iloc[0]["Archetype"])
+
     KO_win = False
 
     for round in range(rounds):
-        initiative_wins_1 =0
-        initiative_wins_2=0
-        counter_punch_count_1=0
-        counter_punch_count_2=0
+        initiative_wins_1 = 0
+        initiative_wins_2 = 0
+        counter_punch_count_1 = 0
+        counter_punch_count_2 = 0
         total_punch_count_1 = 0
         total_punch_count_2 = 0
         landed_punch_count_1 = 0
@@ -558,22 +654,38 @@ def simulate_round(rounds,boxer_1,boxer_2,boxer_1_archetype,boxer_2_archetype,wa
         normal_punch_count_1 = 0
         normal_punch_count_2 = 0
         landed_counter_punch_1 = 0
-        landed_counter_punch_2 = 0 
+        landed_counter_punch_2 = 0
         knockdown_counts_1 = 0
         knockdown_counts_2 = 0
-        stoppage_1 =False
-        stoppage_2 =False
+        stoppage_1 = False
+        stoppage_2 = False
 
         Match_Over = False
         winner = None
 
         print(f"---- ROUND {round+1} -----")
-        for i in range(0,200):
-            if i%5==0:
-                initiative_wins_1,initiative_wins_2,counter_punch_count_1,counter_punch_count_2,total_punch_count_1,total_punch_count_2,landed_punch_count_1,landed_punch_count_2,normal_punch_count_1,landed_counter_punch_1,normal_punch_count_2,landed_counter_punch_2,head_cond_1,body_cond_1,head_cond_2,body_cond_2,knockdown_counts_1,knockdown_counts_2,stoppage_1,stoppage_2,Match_Over,winner= simulate_exchange(boxer_1,boxer_2,boxer_1_archetype,boxer_2_archetype,initiative_wins_1,initiative_wins_2,counter_punch_count_1,counter_punch_count_2,total_punch_count_1,total_punch_count_2,landed_punch_count_1,landed_punch_count_2,normal_punch_count_1,landed_counter_punch_1,normal_punch_count_2,landed_counter_punch_2,head_cond_1,body_cond_1,head_cond_2,body_cond_2,rounds=rounds,knockdown_count_1=knockdown_counts_1,knockdown_count_2=knockdown_counts_2)
+        for i in range(0, 200):
+            if i % 5 == 0:
+                (initiative_wins_1, initiative_wins_2, counter_punch_count_1, counter_punch_count_2,
+                 total_punch_count_1, total_punch_count_2, landed_punch_count_1, landed_punch_count_2,
+                 normal_punch_count_1, landed_counter_punch_1, normal_punch_count_2, landed_counter_punch_2,
+                 head_cond_1, body_cond_1, head_cond_2, body_cond_2,
+                 knockdown_counts_1, knockdown_counts_2, stoppage_1, stoppage_2,
+                 Match_Over, winner, stamina_1, stamina_2) = simulate_exchange(
+                    boxer_1, boxer_2, boxer_1_archetype, boxer_2_archetype,
+                    initiative_wins_1, initiative_wins_2, counter_punch_count_1, counter_punch_count_2,
+                    total_punch_count_1, total_punch_count_2, landed_punch_count_1, landed_punch_count_2,
+                    normal_punch_count_1, landed_counter_punch_1, normal_punch_count_2, landed_counter_punch_2,
+                    head_cond_1, body_cond_1, head_cond_2, body_cond_2,
+                    rounds=rounds, knockdown_count_1=knockdown_counts_1, knockdown_count_2=knockdown_counts_2,
+                    stamina_1=stamina_1, stamina_2=stamina_2, b1_params=b1_params, b2_params=b2_params
+                )
                 time.sleep(delay_value)
                 if Match_Over:
                     break
+
+        stamina_1 = min(100.0, stamina_1 + b1_params["recovery_per_round"])
+        stamina_2 = min(100.0, stamina_2 + b2_params["recovery_per_round"])
         rounds_summary.append({
             "Round":round+1,
             "Boxer 1":{
