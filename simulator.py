@@ -35,6 +35,104 @@ def get_stamina_params(archetype_name):
 
 
 
+def _score_round_10_point_must(boxer_a_landed, boxer_b_landed, boxer_a_total, boxer_b_total,
+                                 boxer_a_kd, boxer_b_kd, boxer_a_counters, boxer_b_counters,
+                                 judge_weights, variance=0.0):
+    """
+    Score a single round using the 10-point must system.
+    
+    Args:
+        boxer_a_landed, boxer_b_landed: Clean punches landed
+        boxer_a_total, boxer_b_total: Total punches thrown
+        boxer_a_kd, boxer_b_kd: Knockdowns scored
+        boxer_a_counters, boxer_b_counters: Counter punches landed
+        judge_weights: Dict with 'clean_punching', 'aggression', 'defense'
+        variance: Random variance for this judge/round (±0.5 typical)
+    
+    Returns:
+        (score_a, score_b) - each 10, 9, 8, 7, or 6 per 10-point must
+    """
+    # Knockdown handling - 10-point must standard
+    kd_diff = boxer_a_kd - boxer_b_kd
+    if kd_diff != 0:
+        if kd_diff > 0:
+            # Boxer A scored knockdown(s)
+            if kd_diff == 1:
+                score_a, score_b = 10, 8
+            elif kd_diff == 2:
+                score_a, score_b = 10, 7
+            else:
+                score_a, score_b = 10, 6  # 3+ KDs
+        else:
+            # Boxer B scored knockdown(s)
+            kd_diff = abs(kd_diff)
+            if kd_diff == 1:
+                score_a, score_b = 8, 10
+            elif kd_diff == 2:
+                score_a, score_b = 7, 10
+            else:
+                score_a, score_b = 6, 10
+        
+        # Apply small variance
+        score_a = max(6, min(10, score_a + random.uniform(-variance, variance)))
+        score_b = max(6, min(10, score_b + random.uniform(-variance, variance)))
+        return round(score_a), round(score_b)
+    
+    # No knockdowns - score based on judge's philosophy
+    # Calculate metrics
+    boxer_a_accuracy = (boxer_a_landed / boxer_a_total * 100) if boxer_a_total > 0 else 0
+    boxer_b_accuracy = (boxer_b_landed / boxer_b_total * 100) if boxer_b_total > 0 else 0
+    
+    boxer_a_missed = boxer_a_total - boxer_a_landed
+    boxer_b_missed = boxer_b_total - boxer_b_landed
+    boxer_a_dodge_rate = (boxer_b_missed / boxer_b_total * 100) if boxer_b_total > 0 else 0
+    boxer_b_dodge_rate = (boxer_a_missed / boxer_a_total * 100) if boxer_a_total > 0 else 0
+    
+    # Judge-specific scoring
+    # Clean punching judge: prioritizes landed punches and accuracy
+    clean_punch_score_a = (boxer_a_landed * judge_weights['clean_punching']['landed'] +
+                           boxer_a_accuracy * judge_weights['clean_punching']['accuracy'] +
+                           boxer_a_counters * judge_weights['clean_punching']['counters'])
+    clean_punch_score_b = (boxer_b_landed * judge_weights['clean_punching']['landed'] +
+                           boxer_b_accuracy * judge_weights['clean_punching']['accuracy'] +
+                           boxer_b_counters * judge_weights['clean_punching']['counters'])
+    
+    # Aggression judge: prioritizes volume and work rate
+    aggression_score_a = (boxer_a_landed * judge_weights['aggression']['landed'] +
+                          boxer_a_total * judge_weights['aggression']['work_rate'])
+    aggression_score_b = (boxer_b_landed * judge_weights['aggression']['landed'] +
+                          boxer_b_total * judge_weights['aggression']['work_rate'])
+    
+    # Defense/ring generalship judge: prioritizes defense and counters
+    defense_score_a = (boxer_a_dodge_rate * judge_weights['defense']['dodge_rate'] +
+                       boxer_a_counters * judge_weights['defense']['counters'] +
+                       boxer_a_landed * judge_weights['defense']['clean_punching'])
+    defense_score_b = (boxer_b_dodge_rate * judge_weights['defense']['dodge_rate'] +
+                       boxer_b_counters * judge_weights['defense']['counters'] +
+                       boxer_b_landed * judge_weights['defense']['clean_punching'])
+    
+    # Combine based on judge type (each judge has one primary philosophy)
+    total_a = clean_punch_score_a + aggression_score_a + defense_score_a
+    total_b = clean_punch_score_b + aggression_score_b + defense_score_b
+    
+    # Apply variance to the comparison totals (not final scores)
+    # This allows judges to disagree on close rounds
+    # Scale variance by typical score magnitude (~70) to make it meaningful
+    variance_scale = variance * 50
+    total_a += random.uniform(-variance_scale, variance_scale)
+    total_b += random.uniform(-variance_scale, variance_scale)
+    
+    # Determine round winner based on variance-adjusted totals
+    if total_a > total_b:
+        score_a, score_b = 10, 9
+    elif total_b > total_a:
+        score_a, score_b = 9, 10
+    else:
+        score_a, score_b = 10, 10  # Even round
+    
+    return score_a, score_b
+
+
 def load_boxers(boxer_path,archetype_path):
 
     boxer_df = pd.read_csv(boxer_path)
@@ -256,10 +354,25 @@ def simulate_exchange(
         if defender_koed:
             defender_kd_count += 1
             defender_heart = defender["Heart"]
-            if defender_head <= 0:
-                defender_head, defender_got_up, defender_stopped = recover_from_ko(defender_heart, defender_head, defender_kd_count, rounds, defender_stamina_factor)
-            if defender_body <= 0:
-                defender_body, defender_got_up, defender_stopped = recover_from_ko(defender_heart, defender_body, defender_kd_count, rounds, defender_stamina_factor)
+            # Single knockdown event - only call recover_from_ko once
+            # Determine which condition to use for recovery based on shot_type
+            if shot_type == "Head" or (defender_head <= 0 and defender_body > 0):
+                recovery_cond = defender_head
+            elif shot_type == "Body" or (defender_body <= 0 and defender_head > 0):
+                recovery_cond = defender_body
+            else:
+                # Both head and body <= 0 (rare: pre-existing KD + new KD on other area)
+                # Default to the shot_type for recovery
+                recovery_cond = defender_head if shot_type == "Head" else defender_body
+            
+            recovery_cond, defender_got_up, defender_stopped = recover_from_ko(
+                defender_heart, recovery_cond, defender_kd_count, rounds, defender_stamina_factor
+            )
+            # Update the condition that was used for recovery
+            if shot_type == "Head" or (defender_head <= 0 and defender_body > 0):
+                defender_head = recovery_cond
+            else:
+                defender_body = recovery_cond
 
 
         if defender_got_up == True:
@@ -363,10 +476,24 @@ def simulate_exchange(
             if attacker_koed:
                 attacker_heart = attacker["Heart"]
                 attacker_kd_count += 1
-                if attacker_head <= 0:
-                    attacker_head, attacker_got_up, attacker_stopped = recover_from_ko(attacker_heart, attacker_head, attacker_kd_count, rounds, counter_defender_stamina_factor)
-                if attacker_body <= 0:
-                    attacker_body, attacker_got_up, attacker_stopped = recover_from_ko(attacker_heart, attacker_body, attacker_kd_count, rounds, counter_defender_stamina_factor)
+                # Single knockdown event - only call recover_from_ko once
+                # Determine which condition to use for recovery based on shot_type
+                if shot_type == "Head" or (attacker_head <= 0 and attacker_body > 0):
+                    recovery_cond = attacker_head
+                elif shot_type == "Body" or (attacker_body <= 0 and attacker_head > 0):
+                    recovery_cond = attacker_body
+                else:
+                    # Both head and body <= 0
+                    recovery_cond = attacker_head if shot_type == "Head" else attacker_body
+                
+                recovery_cond, attacker_got_up, attacker_stopped = recover_from_ko(
+                    attacker_heart, recovery_cond, attacker_kd_count, rounds, counter_defender_stamina_factor
+                )
+                # Update the condition that was used for recovery
+                if shot_type == "Head" or (attacker_head <= 0 and attacker_body > 0):
+                    attacker_head = recovery_cond
+                else:
+                    attacker_body = recovery_cond
 
             if attacker_got_up == True:
                 print(f"{attacker['Name']} got up!")
@@ -812,184 +939,111 @@ def go_decision(rounds_summary):
 
 
 def judge_1(rounds):
-    boxer_1_laned=0
-    boxer_2_laned=0
-    boxer_1_total_punch=0
-    boxer_2_total_punch=0
+    """
+    Judge 1: "Clean Punching" specialist
+    - Prioritizes: Clean punches landed, accuracy, counter punching
+    - Weights: landed=1.0, accuracy=0.5, counters=0.3
+    - Variance: ±0.3 (moderate consistency)
+    """
+    judge_weights = {
+        'clean_punching': {'landed': 1.0, 'accuracy': 0.5, 'counters': 0.3},
+        'aggression': {'landed': 0.3, 'work_rate': 0.1},
+        'defense': {'dodge_rate': 0.1, 'counters': 0.1, 'clean_punching': 0.2},
+    }
+    variance = 0.3
+    
     score_1 = 0
     score_2 = 0
     for i in range(len(rounds)):
-        round_score_1 = 0
-        round_score_2 = 0
-        boxer_1_laned = rounds[i]["Boxer 1"]['Boxer 1 Landed Punches']
-        boxer_2_laned = rounds[i]["Boxer 2"]['Boxer 2 Landed Punches']
-        boxer_1_knockdowns = rounds[i]["Boxer 1"]['Boxer 1 Knockdowns']
-        boxer_2_knockdowns = rounds[i]["Boxer 2"]['Boxer 2 Knockdowns']
-
-        boxer_1_total_punch = rounds[i]['Boxer 1']['Boxer 1 Total Punches']
-        boxer_2_total_punch = rounds[i]['Boxer 2']['Boxer 2 Total Punches']
-
-        if(boxer_1_knockdowns==1):
-            round_score_1+=10
-            round_score_2+=8
-            
-
-            score_1+=round_score_1
-            score_2+=round_score_2
-
-
-
-            continue
-        elif(boxer_1_knockdowns==2):
-            round_score_1+=10
-            round_score_2+=8
-                        
+        r = rounds[i]
+        b1 = r["Boxer 1"]
+        b2 = r["Boxer 2"]
+        
+        s1, s2 = _score_round_10_point_must(
+            b1['Boxer 1 Landed Punches'], b2['Boxer 2 Landed Punches'],
+            b1['Boxer 1 Total Punches'], b2['Boxer 2 Total Punches'],
+            b1['Boxer 1 Knockdowns'], b2['Boxer 2 Knockdowns'],
+            b1['Boxer 1 Counter Punch Landed'], b2['Boxer 2 Counter Punch Landed'],
+            judge_weights, variance
+        )
+        score_1 += s1
+        score_2 += s2
     
-
-            score_1+=round_score_1
-            score_2+=round_score_2
-            
-
-            continue
-        elif(boxer_2_knockdowns==1):
-            round_score_1+=8
-            round_score_2+=10
-                        
-           
-            score_1+=round_score_1
-            score_2+=round_score_2
-            
-
-            continue
-        elif(boxer_2_knockdowns==2):
-            round_score_1+=7
-            round_score_2+=10
-                        
-           
-
-            score_1+=round_score_1
-            score_2+=round_score_2
-            
-
-            continue
-        
-
-        if(boxer_1_total_punch == 0 or boxer_2_total_punch == 0): continue
-        boxer_1_accuracy = (boxer_1_laned/boxer_1_total_punch) *100
-        boxer_2_accuracy = (boxer_2_laned/boxer_2_total_punch) *100
-
-        if(boxer_1_accuracy >boxer_2_accuracy):
-            round_score_1+=10
-            round_score_2+=9
-        elif(boxer_2_accuracy>boxer_1_accuracy):
-            round_score_2+=10
-            round_score_1+=9
-        elif(boxer_1_accuracy == boxer_2_accuracy):
-            round_score_1+=10
-            round_score_2+=10
-                        
-
-
-        score_1+=round_score_1
-        score_2+=round_score_2
-        
-    print(f"First Judge Scored it: {score_1} - {score_2}")
-
-        
-
-    
-
-    return (score_1,score_2)
+    print(f"First Judge (Clean Punching) Scored it: {score_1} - {score_2}")
+    return (score_1, score_2)
 
 def judge_2(rounds):
-    boxer_1_landed=0
-    boxer_2_landed=0
+    """
+    Judge 2: "Effective Aggression" specialist
+    - Prioritizes: Volume of landed punches, work rate (total thrown), forward pressure
+    - Weights: landed=0.8, work_rate=0.4
+    - Variance: ±0.4 (slightly more variable)
+    """
+    judge_weights = {
+        'clean_punching': {'landed': 0.5, 'accuracy': 0.2, 'counters': 0.1},
+        'aggression': {'landed': 0.8, 'work_rate': 0.4},
+        'defense': {'dodge_rate': 0.05, 'counters': 0.1, 'clean_punching': 0.1},
+    }
+    variance = 0.4
+    
     score_1 = 0
     score_2 = 0
     for i in range(len(rounds)):
-        round_score_1 = 0
-        round_score_2 = 0
-        boxer_1_landed = rounds[i]["Boxer 1"]['Boxer 1 Landed Punches']
-        boxer_2_landed = rounds[i]["Boxer 2"]['Boxer 2 Landed Punches']
-        boxer_1_knockdowns = rounds[i]["Boxer 1"]['Boxer 1 Knockdowns']
-        boxer_2_knockdowns = rounds[i]["Boxer 2"]['Boxer 2 Knockdowns']
-        kd_diff = boxer_1_knockdowns - boxer_2_knockdowns
-
-        if kd_diff != 0:
-            if kd_diff > 0:
-                round_score_1 = 10
-                round_score_2 = max(10 - (2 * kd_diff), 6)
-            else:
-                round_score_2 = 10
-                round_score_1 = max(10 - (2 * abs(kd_diff)), 6)
-
-            score_1 += round_score_1
-            score_2 += round_score_2
-            continue
-
-        if(boxer_1_landed > boxer_2_landed):
-            round_score_1 += 10
-            round_score_2 += 9
-        elif(boxer_2_landed > boxer_1_landed):
-            round_score_2 += 10
-            round_score_1 += 9
-        else:
-            round_score_1 += 10
-            round_score_2 += 10
-
-        score_1 += round_score_1
-        score_2 += round_score_2
-
-    print(f"Second Judge total: {score_1} - {score_2}")
-
-
-
+        r = rounds[i]
+        b1 = r["Boxer 1"]
+        b2 = r["Boxer 2"]
+        
+        s1, s2 = _score_round_10_point_must(
+            b1['Boxer 1 Landed Punches'], b2['Boxer 2 Landed Punches'],
+            b1['Boxer 1 Total Punches'], b2['Boxer 2 Total Punches'],
+            b1['Boxer 1 Knockdowns'], b2['Boxer 2 Knockdowns'],
+            b1['Boxer 1 Counter Punch Landed'], b2['Boxer 2 Counter Punch Landed'],
+            judge_weights, variance
+        )
+        score_1 += s1
+        score_2 += s2
     
-
-    return (score_1,score_2)
+    print(f"Second Judge (Effective Aggression) Scored it: {score_1} - {score_2}")
+    return (score_1, score_2)
 
 
     
 
 
 def judge_3(rounds):
-        boxer_1_counter_laned=0
-        boxer_2_counter_laned=0
-        boxer_1_missed_punch=0
-        boxer_2_missed_punch=0
-        score_1 = 0
-        score_2 = 0
-        for i in range(len(rounds)):
-            round_score_1 = 0
-            round_score_2 = 0
-            boxer_1_counter_laned = rounds[i]["Boxer 1"]['Boxer 1 Counter Punch Landed']
-            boxer_2_counter_laned = rounds[i]["Boxer 2"]['Boxer 2 Counter Punch Landed']
-            boxer_2_dodged_punch = rounds[i]["Boxer 1"]['Boxer 1 Total Punches'] - rounds[i]["Boxer 1"]['Boxer 1 Landed Punches']
-            boxer_1_dodged_punch = rounds[i]["Boxer 2"]['Boxer 2 Total Punches'] - rounds[i]["Boxer 2"]['Boxer 2 Landed Punches']
-
-
-            if(boxer_2_dodged_punch > boxer_1_dodged_punch):
-                round_score_1+=9
-                round_score_2+=10
-            elif(boxer_1_dodged_punch>boxer_2_dodged_punch):
-                round_score_1+=10
-                round_score_2+=9
-            elif(boxer_1_dodged_punch== boxer_2_dodged_punch):
-                round_score_1+=10
-                round_score_2+=10
-
-                            
-
-            score_1+=round_score_1
-            score_2+=round_score_2
-            
-        print(f"Third Judge total: {score_1} - {score_2}")
-
-            
-
+    """
+    Judge 3: "Ring Generalship & Defense" specialist
+    - Prioritizes: Defense (making opponent miss), counter punching, ring control
+    - Also considers clean punching as secondary
+    - Weights: dodge_rate=0.8, counters=0.6, clean_punching=0.3
+    - Variance: ±0.5 (most variable - defense is subjective)
+    """
+    judge_weights = {
+        'clean_punching': {'landed': 0.3, 'accuracy': 0.2, 'counters': 0.2},
+        'aggression': {'landed': 0.2, 'work_rate': 0.1},
+        'defense': {'dodge_rate': 0.8, 'counters': 0.6, 'clean_punching': 0.3},
+    }
+    variance = 0.5
+    
+    score_1 = 0
+    score_2 = 0
+    for i in range(len(rounds)):
+        r = rounds[i]
+        b1 = r["Boxer 1"]
+        b2 = r["Boxer 2"]
         
-
-        return (score_1,score_2)
+        s1, s2 = _score_round_10_point_must(
+            b1['Boxer 1 Landed Punches'], b2['Boxer 2 Landed Punches'],
+            b1['Boxer 1 Total Punches'], b2['Boxer 2 Total Punches'],
+            b1['Boxer 1 Knockdowns'], b2['Boxer 2 Knockdowns'],
+            b1['Boxer 1 Counter Punch Landed'], b2['Boxer 2 Counter Punch Landed'],
+            judge_weights, variance
+        )
+        score_1 += s1
+        score_2 += s2
+    
+    print(f"Third Judge (Ring Generalship) Scored it: {score_1} - {score_2}")
+    return (score_1, score_2)
 
 
 
