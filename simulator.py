@@ -1078,6 +1078,25 @@ if __name__ == "__main__":
             print("Invalid Input")
             exit()
 
+    # Check if this is a title fight
+    # Read current champion from rankings.csv
+    isTitleFight = False
+    rankings_path = Path.cwd() / "rankings.csv"
+    if rankings_path.exists():
+        try:
+            rankings_df = pd.read_csv(rankings_path, index_col=0)
+            if len(rankings_df) > 0 and rankings_df.index[0] == "C":
+                current_champion = rankings_df.iloc[0]["Name"]
+                # If either fighter is the current champion, ask if title fight
+                if boxer_1["Name"] == current_champion or boxer_2["Name"] == current_champion:
+                    print(f"\n{current_champion} is the current champion.")
+                    title_choice = input("Is this a title fight? (y/n): ").strip().lower()
+                    if title_choice == 'y':
+                        isTitleFight = True
+                        print("This match is a TITLE FIGHT!")
+        except Exception:
+            pass
+
     rounds_summary,KO_win,winner,loser = simulate_round(rounds,boxer_1,boxer_2,boxer_1_archetype,boxer_2_archetype,watch_mode)
 
 
@@ -1088,7 +1107,7 @@ if __name__ == "__main__":
     else:
         print("Bye Bye")
     # print(winner,loser)
-    new_result = result.Result(winner,loser,KO_win,isDecision,isDraw)
+    new_result = result.Result(winner,loser,KO_win,isDecision,isDraw,isTitleFight)
     new_result.add_result()
 
 
