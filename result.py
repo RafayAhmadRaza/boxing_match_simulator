@@ -1,6 +1,7 @@
 import pandas as pd
 from pathlib import Path 
 import ranker
+from generate_html import generate_site_html
 
 
 class Result:
@@ -75,6 +76,7 @@ class Result:
                 champion_name = self.winner
             
             ranker.update_rankings(result_csv_path, rankings_csv_path, champion_name)
+            generate_site_html()
 
         else:
             boxers_csv_path = Path.cwd() / "boxer.csv"
@@ -101,6 +103,7 @@ class Result:
             # Initialize rankings on first run
             # No champion yet - highest Score will be champion on first manual ranker run
             ranker.update_rankings(result_csv_path, rankings_csv_path)
+            generate_site_html()
 
 
 # For backward compatibility when ranker is run as script
